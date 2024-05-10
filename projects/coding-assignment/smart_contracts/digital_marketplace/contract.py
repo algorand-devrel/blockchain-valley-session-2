@@ -41,7 +41,7 @@ class DigitalMarketplace(arc4.ARC4Contract):
         # 문제 1 시작
         self.asset_id = UInt64(0)
         self.unitary_price = UInt64(0)
-        self.bootstrapped = bool(True)  # GlobalState는 생략 가능
+        self.bootstrapped = bool(False)  # GlobalState는 생략 가능
         # 문제 1 끝
 
     """

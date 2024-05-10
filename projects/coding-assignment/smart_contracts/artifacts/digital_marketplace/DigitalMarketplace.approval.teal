@@ -444,8 +444,8 @@ __init__:
     int 0
     app_global_put
     // smart_contracts/digital_marketplace/contract.py:44
-    // self.bootstrapped = bool(True)  # GlobalState는 생략 가능
+    // self.bootstrapped = bool(False)  # GlobalState는 생략 가능
     byte "bootstrapped"
-    int 1
+    int 0
     app_global_put
     retsub
