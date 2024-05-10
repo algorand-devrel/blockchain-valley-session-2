@@ -39,7 +39,9 @@ class DigitalMarketplace(arc4.ARC4Contract):
 
     def __init__(self) -> None:
         # 문제 1 시작
-        "*** 여기에 코드 작성 ***"
+        self.asset_id = UInt64(0)
+        self.unitary_price = UInt64(0)
+        self.bootstrapped = bool(True)  # GlobalState는 생략 가능
         # 문제 1 끝
 
     """
@@ -62,7 +64,10 @@ class DigitalMarketplace(arc4.ARC4Contract):
     @arc4.abimethod
     def set_price(self, unitary_price: UInt64) -> None:
         # 문제 2 시작
-        "*** 여기에 코드 작성 ***"
+        assert Txn.sender == Global.creator_address, "Only creator can set price"
+        assert self.bootstrapped == bool(True), "Initial price must be set"
+        self.unitary_price = unitary_price
+
         # 문제 2 끝
 
     """
@@ -75,7 +80,7 @@ class DigitalMarketplace(arc4.ARC4Contract):
     bootstrap 메서드는 호출 시 아래 사항들을 만족해야 합니다.
     1. 메서드 호출자가 앱의 생성자인지 체크해야합니다.
     2. 앱 계정이 판매할 ASA에 옵트인이 안되어 있는 것을 체크해야합니다. 옵트인이 되어있다면 이미 부트스트랩이 된 상태입니다.
-    3. mbr_pay가 앱 계정으로 보내진 것을 체크해야합니다. 이는 앱 계정의 미니멈 밸런스를 채우기 위한 payment 트랜잭션입니다.
+    3. mbr_pay가 앱 계정으로 보내진 것을 체크해야합니다. 이는 앱 계정의 미니멈 밸런스를 채우기 위한 payment 트랜잭션입니다. #5번과 같음
     4. mbr_pay의 알고 송금량이 앱 계정의 미니멈 밸런스(0.1 알고)와 판매할 ASA에 옵트인하기 위한 미니멈 밸런스(0.1 알고)의 합과 같은지 체크해야합니다.
         이때 꼭! Global이라는 AVM opcode를 사용해 앱 계정의 미니멈 밸런스와 판매할 ASA에 옵트인하기 위한 미니멈 밸런스를 구하세요!
     5. mbr_pay의 receiver가 앱 계정 주소와 같은지 체크해야합니다.
@@ -98,7 +103,25 @@ class DigitalMarketplace(arc4.ARC4Contract):
         self, asset: Asset, unitary_price: UInt64, mbr_pay: gtxn.PaymentTransaction
     ) -> None:
         # 문제 3 시작
-        "*** 여기에 코드 작성 ***"
+        assert Txn.sender == Global.creator_address, "Only creator can set price"
+        assert Global.current_application_address.is_opted_in(asset) == bool(
+            False
+        ), "Already Bootstrapped"
+        assert (
+            mbr_pay.amount == Global.min_balance + Global.asset_opt_in_min_balance
+        ), "MBR pay amount must be the sum of create and opt-in minimum balance"
+        assert (
+            mbr_pay.receiver == Global.current_application_id.address
+        ), "App acount Must have minimum balance"
+
+        self.asset_id = asset.id
+        self.unitary_price = unitary_price
+        self.bootstrapped = bool(True)
+        itxn.AssetTransfer(
+            asset_receiver=Global.current_application_address,
+            xfer_asset=asset,
+            asset_amount=0,
+        ).submit()
         # 문제 3 끝
 
     """
@@ -133,14 +156,28 @@ class DigitalMarketplace(arc4.ARC4Contract):
         quantity: UInt64,
     ) -> None:
         # 문제 4 시작
-        "*** 여기에 코드 작성 ***"
+        assert self.unitary_price != 0, "Must be bootstrapped"
+        assert buyer_txn.sender == Txn.sender, "Buy sender must be the caller"
+        assert (
+            buyer_txn.receiver == Global.current_application_id.address
+        ), "Receiver must be current application ID"
+        assert (
+            buyer_txn.amount == self.unitary_price * quantity
+        ), "Amount must be product of unitary price and quantity"
+
+        itxn.AssetTransfer(
+            xfer_asset=self.asset_id,
+            # asset_sender=Global.current_application_id.address,
+            asset_receiver=Txn.sender,
+            asset_amount=quantity,
+        ).submit()  # 유저의 opt-in은 외부에서 UI(client side에서)로 해결. 스마트 계약은 최대한 간단하게.
         # 문제 4 끝
 
     """
     문제 5 (쪼금 어려움 😝)
     withdraw_and_delete 메서드를 구현하세요.
 
-    withdraw_and_delete 메서드는 앱 계정에 있는 잔여 에셋(ASA)을 판매자 계정으로 전송하고, 
+    withdraw_and_delete 메서드는 앱 계정에 있는 잔여 에셋(ASA)을 판매자(생성자) 계정으로 전송하고, 
     모든 수익금을 판매자 계정으로 송금한 뒤,
     스마트 계약을 삭제하는 메서드입니다.
 
@@ -152,7 +189,7 @@ class DigitalMarketplace(arc4.ARC4Contract):
     1. 메서드 호출자가 앱의 생성자인지 체크해야합니다.
 
     withdraw_and_delete 메서드는 아래 기능들을 수행합니다.
-    1. 앱 계정에 있는 에셋(ASA)을 앱 계정으로 전송합니다. 
+    1. 앱 계정에 있는 에셋(ASA)을 앱 생성자 계정으로 전송합니다. 
        이때 asset_close_to 패러미터를 앱 생성자(판매자)로 설정하여 
        앱 계정에 남아있는 에섯 전부를 앱 생성자(판매자)에게 보냅니다. 
        에셋의 수량과 무관하게 전량 송금되기 때문에 에셋 수량은 상관 없습니다.
@@ -164,6 +201,20 @@ class DigitalMarketplace(arc4.ARC4Contract):
 
     이번 문제는 함수 정의까지 다 구현해주세요! 함수 이름은 withdraw_and_delete로 해주세요.
     """
+
     # 문제 5 시작
-    "*** 여기에 코드 작성 ***"
+    @arc4.abimethod(allow_actions=["DeleteApplication"])
+    def withdraw_and_delete(self) -> None:
+        assert Txn.sender == Global.creator_address, "Only creator can set price"
+        itxn.AssetTransfer(
+            xfer_asset=self.asset_id,
+            asset_receiver=Global.creator_address,
+            asset_close_to=Global.creator_address,
+        ).submit()
+        itxn.Payment(
+            sender=Global.current_application_id.address,
+            receiver=Global.creator_address,
+            close_remainder_to=Global.creator_address,
+        ).submit()
+
     # 문제 5 끝
