@@ -114,7 +114,6 @@ class DigitalMarketplace(arc4.ARC4Contract):
         itxn.AssetTransfer(
             xfer_asset=asset,
             asset_receiver=Global.current_application_address,
-            asset_sender=Global.current_application_address,
             asset_amount=0,
             sender=Global.current_application_address,
             fee=0,
@@ -161,7 +160,6 @@ class DigitalMarketplace(arc4.ARC4Contract):
         itxn.AssetTransfer(
             xfer_asset=self.asset_id,
             asset_receiver=buyer_txn.sender,
-            asset_sender=Global.current_application_address,
             asset_amount=quantity,
             sender=Global.current_application_address,
             fee=0,
