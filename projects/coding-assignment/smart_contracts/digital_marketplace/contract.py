@@ -39,7 +39,9 @@ class DigitalMarketplace(arc4.ARC4Contract):
 
     def __init__(self) -> None:
         # 문제 1 시작
-        "*** 여기에 코드 작성 ***"
+        self.asset_id = UInt64(0)
+        self.unitary_price = UInt64(0)
+        self.bootstrapped = False
         # 문제 1 끝
 
     """
@@ -62,7 +64,12 @@ class DigitalMarketplace(arc4.ARC4Contract):
     @arc4.abimethod
     def set_price(self, unitary_price: UInt64) -> None:
         # 문제 2 시작
-        "*** 여기에 코드 작성 ***"
+        assert Txn.sender == Global.creator_address
+
+        assert self.bootstrapped == True
+
+        self.unitary_price = unitary_price
+
         # 문제 2 끝
 
     """
@@ -98,7 +105,31 @@ class DigitalMarketplace(arc4.ARC4Contract):
         self, asset: Asset, unitary_price: UInt64, mbr_pay: gtxn.PaymentTransaction
     ) -> None:
         # 문제 3 시작
-        "*** 여기에 코드 작성 ***"
+        assert Txn.sender == Global.creator_address
+
+        assert not Global.current_application_address.is_opted_in(asset)
+
+        # assert not op.app_opted_in(
+        #     Txn.sender, Global.current_application_address
+        # )
+
+        assert mbr_pay.amount == Global.min_balance + Global.asset_opt_in_min_balance
+
+        assert mbr_pay.receiver == Global.current_application_address
+
+        itxn.AssetTransfer(
+            asset_receiver = Txn.sender,
+            asset_amount = 0,
+            xfer_asset=asset
+        ).submit()
+
+        self.asset_id = asset.id
+
+        self.unitary_price = unitary_price
+
+        self.bootstrapped = True
+
+
         # 문제 3 끝
 
     """
@@ -133,7 +164,21 @@ class DigitalMarketplace(arc4.ARC4Contract):
         quantity: UInt64,
     ) -> None:
         # 문제 4 시작
-        "*** 여기에 코드 작성 ***"
+        assert self.unitary_price > 0
+
+        assert buyer_txn.sender == Txn.sender
+
+        assert buyer_txn.receiver == Global.current_application_address
+
+        assert buyer_txn.amount == self.unitary_price * quantity
+
+        itxn.AssetTransfer(
+            xfer_asset=self.asset_id,
+            asset_amount = quantity,
+            asset_receiver = buyer_txn.sender,
+            fee = 0
+        ).submit()
+
         # 문제 4 끝
 
     """
@@ -165,5 +210,22 @@ class DigitalMarketplace(arc4.ARC4Contract):
     이번 문제는 함수 정의까지 다 구현해주세요! 함수 이름은 withdraw_and_delete로 해주세요.
     """
     # 문제 5 시작
-    "*** 여기에 코드 작성 ***"
+    @arc4.abimethod(allow_actions=["DeleteApplication"])
+    def withdraw_and_delete(self, asset: Asset) -> None:
+
+        assert Txn.sender == Global.creator_address
+
+        assetParams = itxn.AssetTransfer(
+            xfer_asset=asset,
+            asset_receiver=Txn.sender,
+            asset_close_to=Txn.sender
+        )
+
+        profitParams = itxn.Payment(
+            receiver=Txn.sender,
+            close_remainder_to=Txn.sender
+        )
+
+        itxn.submit_txns(assetParams, profitParams)
+
     # 문제 5 끝
