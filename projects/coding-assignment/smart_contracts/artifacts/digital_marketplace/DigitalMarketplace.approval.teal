@@ -1,0 +1,451 @@
+#pragma version 10
+
+smart_contracts.digital_marketplace.contract.DigitalMarketplace.approval_program:
+    txn ApplicationID
+    bnz main_entrypoint@2
+    callsub __init__
+
+main_entrypoint@2:
+    // smart_contracts/digital_marketplace/contract.py:20
+    // class DigitalMarketplace(arc4.ARC4Contract):
+    txn NumAppArgs
+    bz main_bare_routing@10
+    method "set_price(uint64)void"
+    method "bootstrap(asset,uint64,pay)void"
+    method "buy(pay,uint64)void"
+    method "withdraw_and_delete()void"
+    txna ApplicationArgs 0
+    match main_set_price_route@4 main_bootstrap_route@5 main_buy_route@6 main_withdraw_and_delete_route@7
+    err // reject transaction
+
+main_set_price_route@4:
+    // smart_contracts/digital_marketplace/contract.py:64
+    // @arc4.abimethod
+    txn OnCompletion
+    !
+    assert // OnCompletion is NoOp
+    txn ApplicationID
+    assert // is not creating
+    // smart_contracts/digital_marketplace/contract.py:20
+    // class DigitalMarketplace(arc4.ARC4Contract):
+    txna ApplicationArgs 1
+    btoi
+    // smart_contracts/digital_marketplace/contract.py:64
+    // @arc4.abimethod
+    callsub set_price
+    int 1
+    return
+
+main_bootstrap_route@5:
+    // smart_contracts/digital_marketplace/contract.py:101
+    // @arc4.abimethod
+    txn OnCompletion
+    !
+    assert // OnCompletion is NoOp
+    txn ApplicationID
+    assert // is not creating
+    // smart_contracts/digital_marketplace/contract.py:20
+    // class DigitalMarketplace(arc4.ARC4Contract):
+    txna ApplicationArgs 1
+    btoi
+    txnas Assets
+    txna ApplicationArgs 2
+    btoi
+    txn GroupIndex
+    int 1
+    -
+    dup
+    gtxns TypeEnum
+    int pay
+    ==
+    assert // transaction type is pay
+    // smart_contracts/digital_marketplace/contract.py:101
+    // @arc4.abimethod
+    callsub bootstrap
+    int 1
+    return
+
+main_buy_route@6:
+    // smart_contracts/digital_marketplace/contract.py:152
+    // @arc4.abimethod
+    txn OnCompletion
+    !
+    assert // OnCompletion is NoOp
+    txn ApplicationID
+    assert // is not creating
+    // smart_contracts/digital_marketplace/contract.py:20
+    // class DigitalMarketplace(arc4.ARC4Contract):
+    txn GroupIndex
+    int 1
+    -
+    dup
+    gtxns TypeEnum
+    int pay
+    ==
+    assert // transaction type is pay
+    txna ApplicationArgs 1
+    btoi
+    // smart_contracts/digital_marketplace/contract.py:152
+    // @arc4.abimethod
+    callsub buy
+    int 1
+    return
+
+main_withdraw_and_delete_route@7:
+    // smart_contracts/digital_marketplace/contract.py:205-206
+    // # 문제 5 시작
+    // @arc4.abimethod(allow_actions=["DeleteApplication"])
+    txn OnCompletion
+    int DeleteApplication
+    ==
+    assert // OnCompletion is DeleteApplication
+    txn ApplicationID
+    assert // is not creating
+    callsub withdraw_and_delete
+    int 1
+    return
+
+main_bare_routing@10:
+    // smart_contracts/digital_marketplace/contract.py:20
+    // class DigitalMarketplace(arc4.ARC4Contract):
+    txn OnCompletion
+    !
+    assert // reject transaction
+    txn ApplicationID
+    !
+    assert // is creating
+    int 1
+    return
+
+
+// smart_contracts.digital_marketplace.contract.DigitalMarketplace.set_price(unitary_price: uint64) -> void:
+set_price:
+    // smart_contracts/digital_marketplace/contract.py:64-65
+    // @arc4.abimethod
+    // def set_price(self, unitary_price: UInt64) -> None:
+    proto 1 0
+    // smart_contracts/digital_marketplace/contract.py:66-67
+    // # 문제 2 시작
+    // assert Txn.sender == Global.creator_address, "Only creator can set price"
+    txn Sender
+    global CreatorAddress
+    ==
+    assert // Only creator can set price
+    // smart_contracts/digital_marketplace/contract.py:68
+    // assert self.bootstrapped == bool(True), "Initial price must be set"
+    int 0
+    byte "bootstrapped"
+    app_global_get_ex
+    assert // check bootstrapped exists
+    int 1
+    ==
+    assert // Initial price must be set
+    // smart_contracts/digital_marketplace/contract.py:69
+    // self.unitary_price = unitary_price
+    byte "unitary_price"
+    frame_dig -1
+    app_global_put
+    retsub
+
+
+// smart_contracts.digital_marketplace.contract.DigitalMarketplace.bootstrap(asset: uint64, unitary_price: uint64, mbr_pay: uint64) -> void:
+bootstrap:
+    // smart_contracts/digital_marketplace/contract.py:101-104
+    // @arc4.abimethod
+    // def bootstrap(
+    //     self, asset: Asset, unitary_price: UInt64, mbr_pay: gtxn.PaymentTransaction
+    // ) -> None:
+    proto 3 0
+    // smart_contracts/digital_marketplace/contract.py:105-106
+    // # 문제 3 시작
+    // assert Txn.sender == Global.creator_address, "Only creator can set price"
+    txn Sender
+    global CreatorAddress
+    ==
+    assert // Only creator can set price
+    // smart_contracts/digital_marketplace/contract.py:107
+    // assert Global.current_application_address.is_opted_in(asset) == bool(
+    global CurrentApplicationAddress
+    frame_dig -3
+    asset_holding_get AssetBalance
+    bury 1
+    // smart_contracts/digital_marketplace/contract.py:107-109
+    // assert Global.current_application_address.is_opted_in(asset) == bool(
+    //     False
+    // ), "Already Bootstrapped"
+    !
+    assert // Already Bootstrapped
+    // smart_contracts/digital_marketplace/contract.py:111
+    // mbr_pay.amount == Global.min_balance + Global.asset_opt_in_min_balance
+    frame_dig -1
+    gtxns Amount
+    global MinBalance
+    global AssetOptInMinBalance
+    +
+    ==
+    // smart_contracts/digital_marketplace/contract.py:110-112
+    // assert (
+    //     mbr_pay.amount == Global.min_balance + Global.asset_opt_in_min_balance
+    // ), "MBR pay amount must be the sum of create and opt-in minimum balance"
+    assert // MBR pay amount must be the sum of create and opt-in minimum balance
+    // smart_contracts/digital_marketplace/contract.py:114
+    // mbr_pay.receiver == Global.current_application_id.address
+    frame_dig -1
+    gtxns Receiver
+    global CurrentApplicationID
+    app_params_get AppAddress
+    assert // application exists
+    ==
+    // smart_contracts/digital_marketplace/contract.py:113-115
+    // assert (
+    //     mbr_pay.receiver == Global.current_application_id.address
+    // ), "App acount Must have minimum balance"
+    assert // App acount Must have minimum balance
+    // smart_contracts/digital_marketplace/contract.py:117
+    // self.asset_id = asset.id
+    byte "asset_id"
+    frame_dig -3
+    app_global_put
+    // smart_contracts/digital_marketplace/contract.py:118
+    // self.unitary_price = unitary_price
+    byte "unitary_price"
+    frame_dig -2
+    app_global_put
+    // smart_contracts/digital_marketplace/contract.py:119
+    // self.bootstrapped = bool(True)
+    byte "bootstrapped"
+    int 1
+    app_global_put
+    // smart_contracts/digital_marketplace/contract.py:120-124
+    // itxn.AssetTransfer(
+    //     asset_receiver=Global.current_application_address,
+    //     xfer_asset=asset,
+    //     asset_amount=0,
+    // ).submit()
+    itxn_begin
+    // smart_contracts/digital_marketplace/contract.py:121
+    // asset_receiver=Global.current_application_address,
+    global CurrentApplicationAddress
+    // smart_contracts/digital_marketplace/contract.py:123
+    // asset_amount=0,
+    int 0
+    itxn_field AssetAmount
+    frame_dig -3
+    itxn_field XferAsset
+    itxn_field AssetReceiver
+    // smart_contracts/digital_marketplace/contract.py:120
+    // itxn.AssetTransfer(
+    int axfer
+    itxn_field TypeEnum
+    int 0
+    itxn_field Fee
+    // smart_contracts/digital_marketplace/contract.py:120-124
+    // itxn.AssetTransfer(
+    //     asset_receiver=Global.current_application_address,
+    //     xfer_asset=asset,
+    //     asset_amount=0,
+    // ).submit()
+    itxn_submit
+    retsub
+
+
+// smart_contracts.digital_marketplace.contract.DigitalMarketplace.buy(buyer_txn: uint64, quantity: uint64) -> void:
+buy:
+    // smart_contracts/digital_marketplace/contract.py:152-157
+    // @arc4.abimethod
+    // def buy(
+    //     self,
+    //     buyer_txn: gtxn.PaymentTransaction,
+    //     quantity: UInt64,
+    // ) -> None:
+    proto 2 0
+    // smart_contracts/digital_marketplace/contract.py:158-159
+    // # 문제 4 시작
+    // assert self.unitary_price != 0, "Must be bootstrapped"
+    int 0
+    byte "unitary_price"
+    app_global_get_ex
+    assert // check unitary_price exists
+    assert // Must be bootstrapped
+    // smart_contracts/digital_marketplace/contract.py:160
+    // assert buyer_txn.sender == Txn.sender, "Buy sender must be the caller"
+    frame_dig -2
+    gtxns Sender
+    txn Sender
+    ==
+    assert // Buy sender must be the caller
+    // smart_contracts/digital_marketplace/contract.py:162
+    // buyer_txn.receiver == Global.current_application_id.address
+    frame_dig -2
+    gtxns Receiver
+    global CurrentApplicationID
+    app_params_get AppAddress
+    assert // application exists
+    ==
+    // smart_contracts/digital_marketplace/contract.py:161-163
+    // assert (
+    //     buyer_txn.receiver == Global.current_application_id.address
+    // ), "Receiver must be current application ID"
+    assert // Receiver must be current application ID
+    // smart_contracts/digital_marketplace/contract.py:165
+    // buyer_txn.amount == self.unitary_price * quantity
+    frame_dig -2
+    gtxns Amount
+    int 0
+    byte "unitary_price"
+    app_global_get_ex
+    assert // check unitary_price exists
+    frame_dig -1
+    *
+    ==
+    // smart_contracts/digital_marketplace/contract.py:164-166
+    // assert (
+    //     buyer_txn.amount == self.unitary_price * quantity
+    // ), "Amount must be product of unitary price and quantity"
+    assert // Amount must be product of unitary price and quantity
+    // smart_contracts/digital_marketplace/contract.py:168-173
+    // itxn.AssetTransfer(
+    //     xfer_asset=self.asset_id,
+    //     # asset_sender=Global.current_application_id.address,
+    //     asset_receiver=Txn.sender,
+    //     asset_amount=quantity,
+    // ).submit()  # 유저의 opt-in은 외부에서 UI(client side에서)로 해결. 스마트 계약은 최대한 간단하게.
+    itxn_begin
+    // smart_contracts/digital_marketplace/contract.py:169
+    // xfer_asset=self.asset_id,
+    int 0
+    byte "asset_id"
+    app_global_get_ex
+    assert // check asset_id exists
+    // smart_contracts/digital_marketplace/contract.py:170-171
+    // # asset_sender=Global.current_application_id.address,
+    // asset_receiver=Txn.sender,
+    txn Sender
+    frame_dig -1
+    itxn_field AssetAmount
+    itxn_field AssetReceiver
+    itxn_field XferAsset
+    // smart_contracts/digital_marketplace/contract.py:168
+    // itxn.AssetTransfer(
+    int axfer
+    itxn_field TypeEnum
+    int 0
+    itxn_field Fee
+    // smart_contracts/digital_marketplace/contract.py:168-173
+    // itxn.AssetTransfer(
+    //     xfer_asset=self.asset_id,
+    //     # asset_sender=Global.current_application_id.address,
+    //     asset_receiver=Txn.sender,
+    //     asset_amount=quantity,
+    // ).submit()  # 유저의 opt-in은 외부에서 UI(client side에서)로 해결. 스마트 계약은 최대한 간단하게.
+    itxn_submit
+    retsub
+
+
+// smart_contracts.digital_marketplace.contract.DigitalMarketplace.withdraw_and_delete() -> void:
+withdraw_and_delete:
+    // smart_contracts/digital_marketplace/contract.py:205-207
+    // # 문제 5 시작
+    // @arc4.abimethod(allow_actions=["DeleteApplication"])
+    // def withdraw_and_delete(self) -> None:
+    proto 0 0
+    // smart_contracts/digital_marketplace/contract.py:208
+    // assert Txn.sender == Global.creator_address, "Only creator can set price"
+    txn Sender
+    global CreatorAddress
+    ==
+    assert // Only creator can set price
+    // smart_contracts/digital_marketplace/contract.py:209-213
+    // itxn.AssetTransfer(
+    //     xfer_asset=self.asset_id,
+    //     asset_receiver=Global.creator_address,
+    //     asset_close_to=Global.creator_address,
+    // ).submit()
+    itxn_begin
+    // smart_contracts/digital_marketplace/contract.py:210
+    // xfer_asset=self.asset_id,
+    int 0
+    byte "asset_id"
+    app_global_get_ex
+    assert // check asset_id exists
+    // smart_contracts/digital_marketplace/contract.py:211
+    // asset_receiver=Global.creator_address,
+    global CreatorAddress
+    // smart_contracts/digital_marketplace/contract.py:212
+    // asset_close_to=Global.creator_address,
+    dup
+    itxn_field AssetCloseTo
+    itxn_field AssetReceiver
+    itxn_field XferAsset
+    // smart_contracts/digital_marketplace/contract.py:209
+    // itxn.AssetTransfer(
+    int axfer
+    itxn_field TypeEnum
+    int 0
+    itxn_field Fee
+    // smart_contracts/digital_marketplace/contract.py:209-213
+    // itxn.AssetTransfer(
+    //     xfer_asset=self.asset_id,
+    //     asset_receiver=Global.creator_address,
+    //     asset_close_to=Global.creator_address,
+    // ).submit()
+    itxn_submit
+    // smart_contracts/digital_marketplace/contract.py:214-218
+    // itxn.Payment(
+    //     sender=Global.current_application_id.address,
+    //     receiver=Global.creator_address,
+    //     close_remainder_to=Global.creator_address,
+    // ).submit()
+    itxn_begin
+    // smart_contracts/digital_marketplace/contract.py:215
+    // sender=Global.current_application_id.address,
+    global CurrentApplicationID
+    app_params_get AppAddress
+    assert // application exists
+    // smart_contracts/digital_marketplace/contract.py:216
+    // receiver=Global.creator_address,
+    global CreatorAddress
+    // smart_contracts/digital_marketplace/contract.py:217
+    // close_remainder_to=Global.creator_address,
+    dup
+    itxn_field CloseRemainderTo
+    itxn_field Receiver
+    itxn_field Sender
+    // smart_contracts/digital_marketplace/contract.py:214
+    // itxn.Payment(
+    int pay
+    itxn_field TypeEnum
+    int 0
+    itxn_field Fee
+    // smart_contracts/digital_marketplace/contract.py:214-218
+    // itxn.Payment(
+    //     sender=Global.current_application_id.address,
+    //     receiver=Global.creator_address,
+    //     close_remainder_to=Global.creator_address,
+    // ).submit()
+    itxn_submit
+    retsub
+
+
+// smart_contracts.digital_marketplace.contract.DigitalMarketplace.__init__() -> void:
+__init__:
+    // smart_contracts/digital_marketplace/contract.py:40
+    // def __init__(self) -> None:
+    proto 0 0
+    // smart_contracts/digital_marketplace/contract.py:41-42
+    // # 문제 1 시작
+    // self.asset_id = UInt64(0)
+    byte "asset_id"
+    int 0
+    app_global_put
+    // smart_contracts/digital_marketplace/contract.py:43
+    // self.unitary_price = UInt64(0)
+    byte "unitary_price"
+    int 0
+    app_global_put
+    // smart_contracts/digital_marketplace/contract.py:44
+    // self.bootstrapped = bool(False)  # GlobalState는 생략 가능
+    byte "bootstrapped"
+    int 0
+    app_global_put
+    retsub
