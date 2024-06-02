@@ -39,7 +39,9 @@ class DigitalMarketplace(arc4.ARC4Contract):
 
     def __init__(self) -> None:
         # 문제 1 시작
-        "*** 여기에 코드 작성 ***"
+        self.asset_id = GlobalState(UInt64(0))
+        self.unitary_price = GlobalState(UInt64(0))
+        self.bootstrapped = GlobalState(bool(False))
         # 문제 1 끝
 
     """
@@ -62,7 +64,9 @@ class DigitalMarketplace(arc4.ARC4Contract):
     @arc4.abimethod
     def set_price(self, unitary_price: UInt64) -> None:
         # 문제 2 시작
-        "*** 여기에 코드 작성 ***"
+       assert Txn.sender == Global.creator_address, "Only creator can opt in to ASA"
+       assert self.bootstrapped.value == True, "App Must be bootstrapped"
+       self.unitary_price.value = unitary_price
         # 문제 2 끝
 
     """
@@ -98,8 +102,25 @@ class DigitalMarketplace(arc4.ARC4Contract):
         self, asset: Asset, unitary_price: UInt64, mbr_pay: gtxn.PaymentTransaction
     ) -> None:
         # 문제 3 시작
-        "*** 여기에 코드 작성 ***"
+        assert Txn.sender == Global.creator_address, "Only creator can opt in to ASA"
+        assert self.bootstrapped.value == False,  "App is already bootstrapped."
+        assert mbr_pay.receiver == Global.current_application_address, "receiver must be the contract address"
+        assert mbr_pay.amount == (Global.min_balance + Global.asset_opt_in_min_balance), "Incorrect funding amount."
+
+        self.asset_id.value = (asset.id)
+        self.unitary_price.value = (unitary_price)
+        self.bootstrapped.value = (True)
+
+        itxn.AssetTransfer(
+            xfer_asset = self.asset_id.value,
+            asset_receiver= Txn.sender,
+            asset_sender= Global.current_application_address,
+            asset_amount= UInt64(0),
+            fee=0
+        ).submit()
+
         # 문제 3 끝
+
 
     """
     문제 4
@@ -133,7 +154,19 @@ class DigitalMarketplace(arc4.ARC4Contract):
         quantity: UInt64,
     ) -> None:
         # 문제 4 시작
-        "*** 여기에 코드 작성 ***"
+        assert self.unitary_price.value != UInt64(0), "Unitary price is not set."
+        assert buyer_txn.sender == Txn.sender, "Payment transaction sender must be the caller."
+        assert buyer_txn.receiver == Global.current_application_address, "Receiver must be this app."
+        assert buyer_txn.amount == self.unitary_price.value * quantity, "Incorrect payment amount."
+
+        itxn.AssetTransfer(
+            xfer_asset = self.asset_id.value,
+            asset_receiver= Txn.sender,
+            asset_sender= Global.current_application_address,
+            asset_amount= quantity,
+            fee=0
+        ).submit()
+
         # 문제 4 끝
 
     """
@@ -165,5 +198,23 @@ class DigitalMarketplace(arc4.ARC4Contract):
     이번 문제는 함수 정의까지 다 구현해주세요! 함수 이름은 withdraw_and_delete로 해주세요.
     """
     # 문제 5 시작
-    "*** 여기에 코드 작성 ***"
+    @arc4.abimethod(allow_actions=["DeleteApplication"])
+    def withdraw_and_delete(self) -> None:
+        assert Txn.sender == Global.creator_address, "Only creator can opt in to ASA"
+
+        itxn.AssetTransfer(
+            xfer_asset = self.asset_id.value,
+            asset_receiver = Global.creator_address,
+            asset_sender = Global.current_application_address,
+            asset_close_to = Global.creator_address,
+            fee=0
+        ).submit()
+
+        itxn.Payment(
+            receiver = Global.creator_address,
+            sender = Global.current_application_address,
+            close_remainder_to = Global.creator_address,
+            fee=0
+        ).submit()
+
     # 문제 5 끝
